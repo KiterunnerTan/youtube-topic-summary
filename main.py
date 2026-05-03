@@ -498,10 +498,8 @@ def main():
     print(f"   共发现 {total_rss} 个新视频（来自 {len(all_rss_videos)} 个频道）", flush=True)
     print(f"   开始处理 {sum(len(v) for v in all_rss_videos.values())} 个视频详情...", flush=True)
 
-    # 收集候选长视频
+    # 收集候选视频（不分长短，GHA上YouTube反爬导致API不可用）
     candidates = []
-    api_calls = 0
-    API_QUOTA_LIMIT = 3000
     print(f"   📋 历史记录数: {len(history)}, 候选频道数: {len([c for c in channels if c['channel_id'] in all_rss_videos])}", flush=True)
 
     for ch in channels:
@@ -514,26 +512,17 @@ def main():
             vid = video["video_id"]
             if vid in history:
                 continue
-            if api_calls >= API_QUOTA_LIMIT:
-                print(f"  ⚠️ YouTube API quota 接近上限 ({api_calls} calls)，停止获取详情")
-                break
-            details = get_video_details(vid)
-            api_calls += 1
-            duration_sec = details["duration"]
-            print(f"   📊 {video['title']}: duration={duration_sec}s")
-            if duration_sec < MIN_DURATION_MINUTES * 60:
-                print(f"   ⏱ 过滤 Shorts: {video['title']} ({duration_sec}s < {MIN_DURATION_MINUTES*60}s)")
-                history[vid] = now_iso
-                continue
-            video["duration_sec"] = duration_sec
-            video["duration_str"] = format_duration(duration_sec)
-            video["description"] = details["description"]
-            video["view_count"] = details["view_count"]
+            # 直接作为候选，不调用 API 获取时长/播放量
+            # GitHub Actions IP 被 YouTube 反爬封禁，yt-dlp 和 Data API 均无法使用
+            video["duration_sec"] = 0
+            video["duration_str"] = "?"
+            video["description"] = ""
+            video["view_count"] = 0  # GHA 上 API 不可用，预过滤跳过播放量检查
             candidates.append(video)
-            print(f"   🎬 候选: {video['title']} ({video['duration_str']}, {format_view_count(video['view_count'])} views)")
+            print(f"   📊 候选: {video['title']}", flush=True)
 
     if not candidates:
-        print("\\n📭 没有新的长视频候选", flush=True)
+        print("\\n📭 没有新的候选视频", flush=True)
         save_history(history)
         return
 
@@ -550,10 +539,12 @@ def main():
         if exclude_re and exclude_re.search(v["title"]):
             print(f"   ⛔ 预过滤（教程）: {v['title']}")
             continue
-        is_preferred = any(pc.lower() in v["author"].lower() for pc in preferred_channels)
-        if v["view_count"] < 200 and not is_preferred:
-            print(f"   ⛔ 预过滤（低播放量非常看频道）: {v['title']} ({format_view_count(v['view_count'])} views)")
-            continue
+        # 播放量未知时（GHA上API不可用），跳过播放量检查
+        if v["view_count"] > 0:
+            is_preferred = any(pc.lower() in v["author"].lower() for pc in preferred_channels)
+            if v["view_count"] < 200 and not is_preferred:
+                print(f"   ⛔ 预过滤（低播放量非常看频道）: {v['title']} ({format_view_count(v['view_count'])} views)")
+                continue
         channel_skipped = False
         for ch_name, ch_rule in channel_filters.items():
             if ch_name.lower() not in v["author"].lower():
