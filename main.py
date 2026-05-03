@@ -394,7 +394,7 @@ def rank_candidates(candidates: list[dict], top_n: int, profile: dict) -> list[d
     channel_notes = profile.get("channel_notes", {})
     channel_notes_section = ""
     if channel_notes:
-        lines = "\\n".join(f"- {ch}：{note}" for ch, note in channel_notes.items())
+        lines = "\n".join(f"- {ch}：{note}" for ch, note in channel_notes.items())
         channel_notes_section = f"\\n特定频道偏好：\\n{lines}\\n"
 
     prompt = f"""你是一个视频筛选助手。请严格按照以下标准筛选。
@@ -494,7 +494,7 @@ def build_digest_text(videos_with_summaries: list[dict]) -> str:
         lines.append(f"🔗 {v['url']}")
         lines.append("")
 
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def save_digest(text: str):
