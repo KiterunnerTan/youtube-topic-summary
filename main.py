@@ -130,25 +130,42 @@ def parse_duration(iso_duration: str) -> int:
 
 
 def get_video_details(video_id: str) -> dict:
-    if not YOUTUBE_API_KEY:
-        return {"duration": 9999, "description": "", "view_count": 0}
-    url = "https://www.googleapis.com/youtube/v3/videos"
-    params = {"part": "contentDetails,snippet,statistics", "id": video_id, "key": YOUTUBE_API_KEY}
+    """获取视频详情。
+
+    时长: 使用 yt-dlp --flat 快速提取（无需 API key，零 quota 消耗）
+    描述/播放量: 使用 YouTube Data API（可选，API key 不可用时会跳过）
+    """
+    dur = 0
+    desc = ""
+    views = 0
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+
+    # 阶段一：yt-dlp flat 提取时长（快速、无需 key）
     try:
-        resp = requests.get(url, params=params, timeout=10)
-        data = resp.json()
-        item = data["items"][0]
-        raw_duration = item["contentDetails"]["duration"]
-        dur = parse_duration(raw_duration)
-        print(f"   🔍 raw_duration={raw_duration!r} -> {dur}s (HTTP {resp.status_code})", flush=True)
-        return {
-            "duration": dur,
-            "description": item["snippet"].get("description", ""),
-            "view_count": int(item["statistics"].get("viewCount", 0)),
-        }
+        import yt_dlp
+        ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+            dur = info.get("duration") or 0
+        print(f"   🔍 yt-dlp duration={dur}s", flush=True)
     except Exception as e:
-        print(f"  ⚠️ [{type(e).__name__}] {e}", flush=True)
-        return {"duration": 0, "description": "", "view_count": 0}
+        print(f"  ⚠️ yt-dlp duration failed: {type(e).__name__} {e}", flush=True)
+
+    # 阶段二：YouTube Data API 获取描述和播放量（可选）
+    if YOUTUBE_API_KEY:
+        url = "https://www.googleapis.com/youtube/v3/videos"
+        params = {"part": "snippet,statistics", "id": video_id, "key": YOUTUBE_API_KEY}
+        try:
+            resp = requests.get(url, params=params, timeout=10)
+            data = resp.json()
+            item = data["items"][0] if data.get("items") else None
+            if item:
+                desc = item["snippet"].get("description", "")
+                views = int(item["statistics"].get("viewCount", 0))
+        except Exception as e:
+            print(f"  ⚠️ YouTube API detail failed: {type(e).__name__} {e}", flush=True)
+
+    return {"duration": dur, "description": desc, "view_count": views}
 
 
 def format_duration(seconds: int) -> str:
