@@ -50,6 +50,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -B data
           git add -f channels.json profile.json history.json
+          git add -f debug_get_video.log 2>/dev/null || true
           git add -f digest/ 2>/dev/null || true
           git commit -m "update data $(date -u +%Y-%m-%d)" || true
           git push origin data --force
