@@ -1,0 +1,54 @@
+name: YouTube Topic Summary Daily
+
+on:
+  schedule:
+    # 每天北京时间 10:00 = UTC 02:00
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # 也支持手动触发
+
+concurrency:
+  group: youtube-topic-summary
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Restore data from data branch
+        continue-on-error: true
+        run: |
+          git fetch origin data 2>/dev/null || true
+          git checkout origin/data -- channels.json profile.json history.json 2>/dev/null || true
+          [ -f channels.json ] || cp channels.example.json channels.json 2>/dev/null || true
+          [ -f profile.json ] || cp profile.example.json profile.json 2>/dev/null || true
+          [ -f history.json ] || echo '{}' > history.json
+
+      - name: Run digest
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: python main.py
+
+      - name: Save data to data branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B data
+          git add -f channels.json profile.json history.json digest/
+          git commit -m "update data $(date -u +%Y-%m-%d)" || true
+          git push origin data --force

@@ -1,0 +1,35 @@
+{
+  "description": "AI/科技行业从业者，关注 AI 技术前沿、创业、投资、产品策略、开源生态、开发者工具",
+  "favorite_content": "创始人/研究者深度访谈、行业大会演讲、技术架构深度讨论、AI 产品分析、开发者经验分享、创业故事",
+  "preferred_channels": [
+    "Andrej Karpathy",
+    "Lex Fridman",
+    "Y Combinator",
+    "a16z",
+    "Lenny's Podcast",
+    "Latent Space",
+    "AI Engineer",
+    "No Priors",
+    "Fireship",
+    "The Diary Of A CEO",
+    "Tim Ferriss",
+    "Peter Yang",
+    "AI Founders",
+    "ACCESS Podcast",
+    "Relentless",
+    "Uncapped with Jack Altman"
+  ],
+  "deprioritize_topics": [
+    "加密货币",
+    "生物科技",
+    "纯游戏评测"
+  ],
+  "exclude_title_patterns": [
+    "full course",
+    "tutorial for beginners",
+    "从零开始",
+    "入门教程",
+    "crash course",
+    "complete guide"
+  ]
+}

@@ -1,0 +1,7 @@
+history.json
+__pycache__/
+.env
+.venv/
+cookies.txt
+.claude/
+.DS_Store
