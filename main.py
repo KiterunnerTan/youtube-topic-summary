@@ -135,6 +135,7 @@ def get_video_details(video_id: str) -> dict:
     时长: 使用 yt-dlp --flat 快速提取（无需 API key，零 quota 消耗）
     描述/播放量: 使用 YouTube Data API（可选，API key 不可用时会跳过）
     """
+    debug_lines = [f"get_video_details({video_id})"]
     dur = 0
     desc = ""
     views = 0
@@ -143,16 +144,20 @@ def get_video_details(video_id: str) -> dict:
     # 阶段一：yt-dlp flat 提取时长（快速、无需 key）
     try:
         import yt_dlp
+        debug_lines.append(f"  yt-dlp imported OK")
         ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
             dur = info.get("duration") or 0
-        print(f"   🔍 yt-dlp duration={dur}s", flush=True)
+            debug_lines.append(f"  yt-dlp duration={dur}")
+        print(f"   D yt-dlp={dur}s", flush=True)
     except Exception as e:
-        print(f"  ⚠️ yt-dlp duration failed: {type(e).__name__} {e}", flush=True)
+        debug_lines.append(f"  yt-dlp FAILED: {type(e).__name__} {e}")
+        print(f"   D yt-dlp-ERR: {type(e).__name__} {e}", flush=True)
 
     # 阶段二：YouTube Data API 获取描述和播放量（可选）
     if YOUTUBE_API_KEY:
+        debug_lines.append(f"  YouTube API: trying...")
         url = "https://www.googleapis.com/youtube/v3/videos"
         params = {"part": "snippet,statistics", "id": video_id, "key": YOUTUBE_API_KEY}
         try:
@@ -162,8 +167,20 @@ def get_video_details(video_id: str) -> dict:
             if item:
                 desc = item["snippet"].get("description", "")
                 views = int(item["statistics"].get("viewCount", 0))
+                debug_lines.append(f"  YouTube API: views={views}, desc_len={len(desc)}")
+            else:
+                debug_lines.append(f"  YouTube API: no items")
         except Exception as e:
-            print(f"  ⚠️ YouTube API detail failed: {type(e).__name__} {e}", flush=True)
+            debug_lines.append(f"  YouTube API FAILED: {type(e).__name__} {e}")
+            print(f"   D yt-api-ERR: {type(e).__name__} {e}", flush=True)
+
+    debug_lines.append(f"  RETURN dur={dur}")
+    # 写入调试文件
+    try:
+        with open("debug_get_video.log", "a") as f:
+            f.write("\n".join(debug_lines) + "\n")
+    except:
+        pass
 
     return {"duration": dur, "description": desc, "view_count": views}
 
