@@ -216,8 +216,8 @@ def get_transcript(video_id: str) -> str | None:
         }
         if _yt_cookies_file and os.path.exists(_yt_cookies_file):
             ydl_opts['cookiefile'] = _yt_cookies_file
-        else:
-            ydl_opts['cookiesfrombrowser'] = ('chrome',)
+        # GHA 上没有浏览器 cookies，yt-dlp 会被反爬拦截
+        # 字幕获取失败时会自动回退到使用 video description
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'https://www.youtube.com/watch?v={video_id}', download=False)
@@ -288,7 +288,7 @@ def call_gemini(prompt: str) -> str | None:
         from google import genai
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
         )
         return response.text
@@ -616,7 +616,7 @@ def main():
         history[video["video_id"]] = now_iso
 
     save_history(history)
-    print(f"\\n✅ 完成，共推送 {len(top_videos)} 个视频（候选 {len(candidates)} 个，API 调用 {api_calls} 次）")
+    print(f"\\n✅ 完成，共推送 {len(top_videos)} 个视频（共 {len(candidates)} 个候选）")
 
 
 if __name__ == "__main__":
