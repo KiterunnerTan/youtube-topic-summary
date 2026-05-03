@@ -465,12 +465,14 @@ def main():
     candidates = []
     api_calls = 0
     API_QUOTA_LIMIT = 3000
+    print(f"   📋 历史记录数: {len(history)}, 候选频道数: {len([c for c in channels if c['channel_id'] in all_rss_videos])}", flush=True)
 
     for ch in channels:
         channel_id = ch["channel_id"]
         videos = all_rss_videos.get(channel_id, [])
         if not videos:
             continue
+        print(f"   📺 处理频道 {ch['name']}: {len(videos)} 个视频", flush=True)
         for video in videos:
             vid = video["video_id"]
             if vid in history:
