@@ -458,7 +458,8 @@ def main():
                 print(f"  ⚠️ {ch.get('name', ch['channel_id'])}: {e}")
 
     total_rss = sum(len(v) for v in all_rss_videos.values())
-    print(f"   共发现 {total_rss} 个新视频（来自 {len(all_rss_videos)} 个频道）\\n")
+    print(f"   共发现 {total_rss} 个新视频（来自 {len(all_rss_videos)} 个频道）", flush=True)
+    print(f"   开始处理 {sum(len(v) for v in all_rss_videos.values())} 个视频详情...", flush=True)
 
     # 收集候选长视频
     candidates = []
@@ -493,7 +494,7 @@ def main():
             print(f"   🎬 候选: {video['title']} ({video['duration_str']}, {format_view_count(video['view_count'])} views)")
 
     if not candidates:
-        print("\\n📭 没有新的长视频候选")
+        print("\\n📭 没有新的长视频候选", flush=True)
         save_history(history)
         return
 
