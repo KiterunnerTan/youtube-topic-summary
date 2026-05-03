@@ -300,7 +300,7 @@ def call_gemini(prompt: str) -> str | None:
 
 
 def call_deepseek(prompt: str, max_tokens: int = 1024) -> str | None:
-    """调用 DeepSeek API (OpenAI 兼容格式). 自动处理 thinking 模式 JSON 包装."""
+    """调用 DeepSeek API (OpenAI 兼容格式). 自动处理 thinking 模式包装."""
     if not DEEPSEEK_API_KEY:
         return None
     try:
@@ -322,17 +322,37 @@ def call_deepseek(prompt: str, max_tokens: int = 1024) -> str | None:
             print(f"  ⚠️ DeepSeek error: {data['error']}")
             return None
         content = data["choices"][0]["message"]["content"]
-        # DeepSeek thinking 模式可能返回 JSON 包装: {"thinking": "...", "content": "实际答案"}
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict) and "content" in parsed:
-                return parsed["content"]
-        except (json.JSONDecodeError, ValueError):
-            pass
-        return content
+        # 尝试从 thinking 模式包装中提取实际答案
+        # 格式可能是: {'thinking': '...', 'content': '实际答案'} (Python dict 或 JSON)
+        extracted = _extract_content_field(content)
+        return extracted if extracted else content
     except Exception as e:
         print(f"  ⚠️ DeepSeek call failed: {e}")
         return None
+
+
+def _extract_content_field(text: str) -> str | None:
+    """从 thinking 模式输出中提取 content 字段."""
+    # 1. 尝试 JSON
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict) and "content" in parsed:
+            return parsed["content"]
+    except (json.JSONDecodeError, ValueError):
+        pass
+    # 2. 尝试 ast.literal_eval
+    try:
+        import ast
+        parsed = ast.literal_eval(text)
+        if isinstance(parsed, dict) and "content" in parsed:
+            return parsed["content"]
+    except (ValueError, SyntaxError):
+        pass
+    # 3. 正则提取 'content': '...' 或 "content": "..."
+    m = re.search(r"""['\"]content['\"]\s*:\s*['\"](.+?)['\"]\s*[,}]\s*$""", text, re.DOTALL)
+    if m:
+        return m.group(1)
+    return None
 
 
 def summarize_with_llm(title: str, author: str, content: str, content_type: str = "字幕") -> dict:
