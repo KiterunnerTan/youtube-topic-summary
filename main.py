@@ -300,7 +300,7 @@ def call_gemini(prompt: str) -> str | None:
 
 
 def call_deepseek(prompt: str, max_tokens: int = 1024) -> str | None:
-    """调用 DeepSeek API (OpenAI 兼容格式)"""
+    """调用 DeepSeek API (OpenAI 兼容格式). 自动处理 thinking 模式 JSON 包装."""
     if not DEEPSEEK_API_KEY:
         return None
     try:
@@ -321,7 +321,15 @@ def call_deepseek(prompt: str, max_tokens: int = 1024) -> str | None:
         if "error" in data:
             print(f"  ⚠️ DeepSeek error: {data['error']}")
             return None
-        return data["choices"][0]["message"]["content"]
+        content = data["choices"][0]["message"]["content"]
+        # DeepSeek thinking 模式可能返回 JSON 包装: {"thinking": "...", "content": "实际答案"}
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and "content" in parsed:
+                return parsed["content"]
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return content
     except Exception as e:
         print(f"  ⚠️ DeepSeek call failed: {e}")
         return None
