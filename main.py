@@ -25,6 +25,8 @@ MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_API_BASE = os.environ.get("MINIMAX_API_BASE", "https://api.minimaxi.com/anthropic")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 MIN_DURATION_MINUTES = int(os.environ.get("MIN_DURATION_MINUTES", "3"))
 TOP_N = int(os.environ.get("TOP_N", "5"))
 LOOKBACK_HOURS = int(os.environ.get("LOOKBACK_HOURS", "24"))
@@ -297,6 +299,34 @@ def call_gemini(prompt: str) -> str | None:
         return None
 
 
+def call_deepseek(prompt: str, max_tokens: int = 1024) -> str | None:
+    """调用 DeepSeek API (OpenAI 兼容格式)"""
+    if not DEEPSEEK_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek-v4-flash",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+            },
+            timeout=60,
+        )
+        data = resp.json()
+        if "error" in data:
+            print(f"  ⚠️ DeepSeek error: {data['error']}")
+            return None
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        print(f"  ⚠️ DeepSeek call failed: {e}")
+        return None
+
+
 def summarize_with_llm(title: str, author: str, content: str, content_type: str = "字幕") -> dict:
     if not MINIMAX_API_KEY:
         return {"summary": "⚠️ 未配置 MINIMAX_API_KEY，跳过摘要"}
@@ -388,9 +418,9 @@ def rank_candidates(candidates: list[dict], top_n: int, profile: dict) -> list[d
 
 只输出 {top_n} 行，不要其他文字。"""
 
-    result = call_gemini(prompt)
+    result = call_deepseek(prompt)
     if not result:
-        print("  ⚠️ Gemini 排序失败，尝试 MiniMax...")
+        print("  ⚠️ DeepSeek 排序失败，尝试 MiniMax...")
         result = call_llm(prompt, max_tokens=500)
     if not result:
         print("  ⚠️ LLM 排序全部失败，回退到播放量排序")
