@@ -138,13 +138,16 @@ def get_video_details(video_id: str) -> dict:
         resp = requests.get(url, params=params, timeout=10)
         data = resp.json()
         item = data["items"][0]
+        raw_duration = item["contentDetails"]["duration"]
+        dur = parse_duration(raw_duration)
+        print(f"   🔍 raw_duration={raw_duration!r} -> {dur}s (HTTP {resp.status_code})", flush=True)
         return {
-            "duration": parse_duration(item["contentDetails"]["duration"]),
+            "duration": dur,
             "description": item["snippet"].get("description", ""),
             "view_count": int(item["statistics"].get("viewCount", 0)),
         }
     except Exception as e:
-        print(f"  ⚠️ Details fetch failed: {e}")
+        print(f"  ⚠️ [{type(e).__name__}] {e}", flush=True)
         return {"duration": 0, "description": "", "view_count": 0}
 
 
