@@ -480,7 +480,9 @@ def main():
             details = get_video_details(vid)
             api_calls += 1
             duration_sec = details["duration"]
+            print(f"   📊 {video['title']}: duration={duration_sec}s")
             if duration_sec < MIN_DURATION_MINUTES * 60:
+                print(f"   ⏱ 过滤 Shorts: {video['title']} ({duration_sec}s < {MIN_DURATION_MINUTES*60}s)")
                 history[vid] = now_iso
                 continue
             video["duration_sec"] = duration_sec
