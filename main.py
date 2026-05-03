@@ -302,6 +302,7 @@ def call_gemini(prompt: str) -> str | None:
 def call_deepseek(prompt: str, max_tokens: int = 1024) -> str | None:
     """调用 DeepSeek API (OpenAI 兼容格式). 自动处理 thinking 模式包装."""
     if not DEEPSEEK_API_KEY:
+        print(f"  ⚠️ DeepSeek: 未设置 DEEPSEEK_API_KEY", flush=True)
         return None
     try:
         resp = requests.post(
@@ -311,7 +312,7 @@ def call_deepseek(prompt: str, max_tokens: int = 1024) -> str | None:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "deepseek-v4-flash",
+                "model": "deepseek-chat",  # 不用 v4-flash 避免 thinking 模式
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_tokens,
             },
@@ -348,10 +349,18 @@ def _extract_content_field(text: str) -> str | None:
             return parsed["content"]
     except (ValueError, SyntaxError):
         pass
-    # 3. 正则提取 'content': '...' 或 "content": "..."
-    m = re.search(r"""['\"]content['\"]\s*:\s*['\"](.+?)['\"]\s*[,}]\s*$""", text, re.DOTALL)
+    # 3. 正则提取 - content 是字典最后一个字段: 'content': '...'}
+    m = re.search(r"""['\"]content['\"]\s*:\s*['\"](.+?)['\"]\s*}\s*$""", text, re.DOTALL)
     if m:
         return m.group(1)
+    # 4. 更宽松的正则: 匹配 content 后面到末尾的所有内容
+    m = re.search(r"""['\"]content['\"]\s*:\s*['\"](.*)['\"]\s*$""", text, re.DOTALL)
+    if m:
+        # 去掉末尾可能残留的 }
+        result = m.group(1).rstrip()
+        if result.endswith('}'):
+            result = result[:-1].rstrip()
+        return result
     return None
 
 
