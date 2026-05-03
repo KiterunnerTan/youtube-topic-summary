@@ -288,7 +288,7 @@ def call_gemini(prompt: str) -> str | None:
         from google import genai
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-1.5-flash",
             contents=prompt,
         )
         return response.text
@@ -415,6 +415,7 @@ def rank_candidates(candidates: list[dict], top_n: int, profile: dict) -> list[d
 
     if not results:
         print("  ⚠️ LLM 返回解析失败，回退到播放量排序")
+        print(f"  🔍 原始返回 (前200字): {result[:200]!r}")
         candidates.sort(key=lambda v: v["view_count"], reverse=True)
         return [{"index": i, "reason": ""} for i in range(min(top_n, len(candidates)))]
 
