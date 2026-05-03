@@ -35,7 +35,6 @@ PROFILE_FILE = os.environ.get("PROFILE_FILE", "profile.json")
 HISTORY_FILE = os.environ.get("HISTORY_FILE", "history.json")
 DIGEST_DIR = os.environ.get("DIGEST_DIR", "digest")
 HISTORY_MAX_DAYS = int(os.environ.get("HISTORY_MAX_DAYS", "30"))
-_yt_cookies_file = os.environ.get("YT_COOKIES_FILE", "")
 
 
 def load_channels() -> list[dict]:
@@ -204,45 +203,15 @@ def format_view_count(count: int) -> str:
 
 
 def get_transcript(video_id: str) -> str | None:
+    """使用 youtube-transcript-api 获取字幕（无需浏览器 cookies）"""
     try:
-        import yt_dlp
-        ydl_opts = {
-            'skip_download': True,
-            'writesubtitles': True,
-            'writeautomaticsub': True,
-            'subtitleslangs': ['en'],
-            'quiet': True,
-            'no_warnings': True,
-            'ignore_no_formats_error': True,
-            'remote_components': {'ejs': 'github'},
-        }
-        if _yt_cookies_file and os.path.exists(_yt_cookies_file):
-            ydl_opts['cookiefile'] = _yt_cookies_file
-        # GHA 上没有浏览器 cookies，yt-dlp 会被反爬拦截
-        # 字幕获取失败时会自动回退到使用 video description
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f'https://www.youtube.com/watch?v={video_id}', download=False)
-            subs = info.get('subtitles', {})
-            auto_subs = info.get('automatic_captions', {})
-            en_subs = subs.get('en') or auto_subs.get('en')
-            if not en_subs:
-                return None
-            for fmt in en_subs:
-                if fmt.get('ext') == 'json3':
-                    resp = requests.get(fmt['url'], timeout=15)
-                    data = resp.json()
-                    texts = []
-                    for e in data.get('events', []):
-                        for s in e.get('segs', []):
-                            t = s.get('utf8', '').strip()
-                            if t and t != '\\n':
-                                texts.append(t)
-                    text = ' '.join(texts)
-                    if len(text) > 80000:
-                        text = text[:80000] + ' ...[truncated]'
-                    return text if len(text) > 100 else None
-        return None
+        from youtube_transcript_api import YouTubeTranscriptApi
+        api = YouTubeTranscriptApi()
+        transcript = api.fetch(video_id, languages=['en'])
+        text = ' '.join([t.text for t in transcript])
+        if len(text) > 80000:
+            text = text[:80000] + ' ...[truncated]'
+        return text if len(text) > 100 else None
     except Exception as e:
         print(f"      ⚠️ 字幕获取失败: {e}")
         return None
