@@ -122,7 +122,7 @@ def fetch_rss_videos(channel_id: str) -> list[dict]:
 
 # ============ YouTube Data API ============
 def parse_duration(iso_duration: str) -> int:
-    match = re.match(r"PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?", iso_duration)
+    match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso_duration)
     if not match:
         return 0
     h = int(match.group(1) or 0)
@@ -470,7 +470,7 @@ def rank_candidates(candidates: list[dict], top_n: int, profile: dict) -> list[d
         if not line:
             continue
         parts = line.split("|", 1)
-        nums = re.findall(r'\\d+', parts[0])
+        nums = re.findall(r'\d+', parts[0])
         if not nums:
             continue
         idx = int(nums[0]) - 1
