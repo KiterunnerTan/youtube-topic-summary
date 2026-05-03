@@ -142,59 +142,24 @@ def parse_duration(iso_duration: str) -> int:
 
 
 def get_video_details(video_id: str) -> dict:
-    """获取视频详情。
-
-    时长: 使用 yt-dlp --flat 快速提取（无需 API key，零 quota 消耗）
-    描述/播放量: 使用 YouTube Data API（可选，API key 不可用时会跳过）
-    """
-    debug_lines = [f"get_video_details({video_id})"]
-    dur = 0
-    desc = ""
-    views = 0
-    video_url = f"https://www.youtube.com/watch?v={video_id}"
-
-    # 阶段一：yt-dlp flat 提取时长（快速、无需 key）
+    """YouTube Data API 获取时长、描述、播放量"""
+    if not YOUTUBE_API_KEY:
+        return {"duration": 0, "description": "", "view_count": 0}
+    url = "https://www.googleapis.com/youtube/v3/videos"
+    params = {"part": "contentDetails,snippet,statistics", "id": video_id, "key": YOUTUBE_API_KEY}
     try:
-        import yt_dlp
-        debug_lines.append(f"  yt-dlp imported OK")
-        ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=False)
-            dur = info.get("duration") or 0
-            debug_lines.append(f"  yt-dlp duration={dur}")
-        print(f"   D yt-dlp={dur}s", flush=True)
-    except Exception as e:
-        debug_lines.append(f"  yt-dlp FAILED: {type(e).__name__} {e}")
-        print(f"   D yt-dlp-ERR: {type(e).__name__} {e}", flush=True)
-
-    # 阶段二：YouTube Data API 获取描述和播放量（可选）
-    if YOUTUBE_API_KEY:
-        debug_lines.append(f"  YouTube API: trying...")
-        url = "https://www.googleapis.com/youtube/v3/videos"
-        params = {"part": "snippet,statistics", "id": video_id, "key": YOUTUBE_API_KEY}
-        try:
-            resp = requests.get(url, params=params, timeout=10)
-            data = resp.json()
-            item = data["items"][0] if data.get("items") else None
-            if item:
-                desc = item["snippet"].get("description", "")
-                views = int(item["statistics"].get("viewCount", 0))
-                debug_lines.append(f"  YouTube API: views={views}, desc_len={len(desc)}")
-            else:
-                debug_lines.append(f"  YouTube API: no items")
-        except Exception as e:
-            debug_lines.append(f"  YouTube API FAILED: {type(e).__name__} {e}")
-            print(f"   D yt-api-ERR: {type(e).__name__} {e}", flush=True)
-
-    debug_lines.append(f"  RETURN dur={dur}")
-    # 写入调试文件
-    try:
-        with open("debug_get_video.log", "a") as f:
-            f.write("\n".join(debug_lines) + "\n")
-    except:
+        resp = requests.get(url, params=params, timeout=10)
+        data = resp.json()
+        item = data["items"][0] if data.get("items") else None
+        if item:
+            return {
+                "duration": parse_duration(item["contentDetails"]["duration"]),
+                "description": item["snippet"].get("description", ""),
+                "view_count": int(item["statistics"].get("viewCount", 0)),
+            }
+    except Exception:
         pass
-
-    return {"duration": dur, "description": desc, "view_count": views}
+    return {"duration": 0, "description": "", "view_count": 0}
 
 
 def format_duration(seconds: int) -> str:
@@ -546,8 +511,10 @@ def main():
     print(f"   共发现 {total_rss} 个新视频（来自 {len(all_rss_videos)} 个频道）", flush=True)
     print(f"   开始处理 {sum(len(v) for v in all_rss_videos.values())} 个视频详情...", flush=True)
 
-    # 收集候选视频（不分长短，GHA上YouTube反爬导致API不可用）
+    # 收集候选长视频（通过 YouTube Data API 获取真实时长和播放量）
     candidates = []
+    api_calls = 0
+    API_QUOTA_LIMIT = 8000  # YouTube Data API v3 日配额 10000 单位，留余量
     print(f"   📋 历史记录数: {len(history)}, 候选频道数: {len([c for c in channels if c['channel_id'] in all_rss_videos])}", flush=True)
 
     for ch in channels:
@@ -560,17 +527,28 @@ def main():
             vid = video["video_id"]
             if vid in history:
                 continue
-            # 直接作为候选，不调用 API 获取时长/播放量
-            # GitHub Actions IP 被 YouTube 反爬封禁，yt-dlp 和 Data API 均无法使用
-            video["duration_sec"] = 0
-            video["duration_str"] = "?"
-            video["description"] = video.get("description", "")  # 保留 RSS 描述
-            video["view_count"] = 0  # GHA 上 API 不可用，预过滤跳过播放量检查
+            if api_calls >= API_QUOTA_LIMIT:
+                print(f"  ⚠️ YouTube API quota 接近上限 ({api_calls} calls)，停止获取详情")
+                break
+            details = get_video_details(vid)
+            api_calls += 1
+            duration_sec = details["duration"]
+            # 保留 RSS 描述作为 fallback
+            rss_desc = video.get("description", "")
+            print(f"   📊 {video['title']}: duration={duration_sec}s, views={details['view_count']}", flush=True)
+            if duration_sec < MIN_DURATION_MINUTES * 60:
+                print(f"   ⏱ 过滤 Shorts: {video['title']} ({duration_sec}s < {MIN_DURATION_MINUTES*60}s)", flush=True)
+                history[vid] = now_iso
+                continue
+            video["duration_sec"] = duration_sec
+            video["duration_str"] = format_duration(duration_sec)
+            video["description"] = details["description"] or rss_desc  # API 描述优先，fallback RSS
+            video["view_count"] = details["view_count"]
             candidates.append(video)
-            print(f"   📊 候选: {video['title']}", flush=True)
+            print(f"   🎬 候选: {video['title']} ({video['duration_str']}, {format_view_count(video['view_count'])} views)", flush=True)
 
     if not candidates:
-        print("\\n📭 没有新的候选视频", flush=True)
+        print("\\n📭 没有新的长视频候选", flush=True)
         save_history(history)
         return
 
@@ -587,12 +565,10 @@ def main():
         if exclude_re and exclude_re.search(v["title"]):
             print(f"   ⛔ 预过滤（教程）: {v['title']}")
             continue
-        # 播放量未知时（GHA上API不可用），跳过播放量检查
-        if v["view_count"] > 0:
-            is_preferred = any(pc.lower() in v["author"].lower() for pc in preferred_channels)
-            if v["view_count"] < 200 and not is_preferred:
-                print(f"   ⛔ 预过滤（低播放量非常看频道）: {v['title']} ({format_view_count(v['view_count'])} views)")
-                continue
+        is_preferred = any(pc.lower() in v["author"].lower() for pc in preferred_channels)
+        if v["view_count"] < 200 and not is_preferred:
+            print(f"   ⛔ 预过滤（低播放量非常看频道）: {v['title']} ({format_view_count(v['view_count'])} views)")
+            continue
         channel_skipped = False
         for ch_name, ch_rule in channel_filters.items():
             if ch_name.lower() not in v["author"].lower():
@@ -664,7 +640,7 @@ def main():
         history[video["video_id"]] = now_iso
 
     save_history(history)
-    print(f"\\n✅ 完成，共推送 {len(top_videos)} 个视频（共 {len(candidates)} 个候选）")
+    print(f"\\n✅ 完成，共推送 {len(top_videos)} 个视频（共 {len(candidates)} 个候选，API {api_calls} 次）")
 
 
 if __name__ == "__main__":
