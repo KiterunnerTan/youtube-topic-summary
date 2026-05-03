@@ -109,12 +109,23 @@ def fetch_rss_videos(channel_id: str) -> list[dict]:
         video_id = entry.find("yt:videoId", ns).text
         title = entry.find("atom:title", ns).text
         author = root.find("atom:title", ns).text
+        # 从 RSS 提取描述（字幕不可用时作为 LLM 摘要输入）
+        description = ""
+        try:
+            media_group = entry.find("media:group", ns)
+            if media_group is not None:
+                media_desc = media_group.find("media:description", ns)
+                if media_desc is not None and media_desc.text:
+                    description = media_desc.text
+        except Exception:
+            pass
         videos.append({
             "video_id": video_id,
             "title": title,
             "author": author,
             "published": published_str,
             "url": f"https://www.youtube.com/watch?v={video_id}",
+            "description": description,
         })
     return videos
 
@@ -553,7 +564,7 @@ def main():
             # GitHub Actions IP 被 YouTube 反爬封禁，yt-dlp 和 Data API 均无法使用
             video["duration_sec"] = 0
             video["duration_str"] = "?"
-            video["description"] = ""
+            video["description"] = video.get("description", "")  # 保留 RSS 描述
             video["view_count"] = 0  # GHA 上 API 不可用，预过滤跳过播放量检查
             candidates.append(video)
             print(f"   📊 候选: {video['title']}", flush=True)
